@@ -34,6 +34,7 @@ import org.apache.hadoop.hbase.client.BufferedMutator;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
+import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.mapreduce.JobContext;
@@ -55,6 +56,15 @@ implements Configurable {
 
   /** Job parameter that specifies the output table. */
   public static final String OUTPUT_TABLE = "hbase.mapred.outputtable";
+
+  /** Property value to use write-ahead logging */
+  public static final boolean WAL_ON = true;
+
+  /** Property value to disable write-ahead logging */
+  public static final boolean WAL_OFF = false;
+
+  /** Set this to {@link #WAL_OFF} to turn off write-ahead logging (WAL) */
+  public static final String WAL_PROPERTY = "hbase.mapreduce.tableoutputformat.write.wal";
 
   /**
    * Prefix for configuration property overrides to apply in {@link #setConf(Configuration)}.
@@ -95,6 +105,7 @@ implements Configurable {
 
     private Connection connection;
     private BufferedMutator mutator;
+    boolean useWriteAheadLogging;
 
     /**
      * @throws IOException
@@ -104,7 +115,8 @@ implements Configurable {
       String tableName = conf.get(OUTPUT_TABLE);
       this.connection = ConnectionFactory.createConnection(conf);
       this.mutator = connection.getBufferedMutator(TableName.valueOf(tableName));
-      LOG.info("Created table instance for "  + tableName);
+      LOG.info("Created table instance for " + tableName);
+      this.useWriteAheadLogging = conf.getBoolean(WAL_PROPERTY, WAL_ON);
     }
     /**
      * Closes the writer, in this case flush table commits.
@@ -139,6 +151,9 @@ implements Configurable {
     throws IOException {
       if (!(value instanceof Put) && !(value instanceof Delete)) {
         throw new IOException("Pass a Delete or a Put");
+      }
+      if (!useWriteAheadLogging) {
+        value.setDurability(Durability.SKIP_WAL);
       }
       mutator.mutate(value);
     }
